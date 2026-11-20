@@ -1,0 +1,271 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated RepairLoop user profile with role-based access control.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 150 },
+        "role": { "type": "string", "enum": ["customer", "mechanic", "vendor"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "role", "createdAt", "updatedAt"]
+    },
+    "RepairRequest": {
+      "title": "RepairRequest",
+      "description": "Customer repair request for an electronic device or household appliance.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "modelNumber": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "productAgeYears": { "type": "number" },
+        "purchaseDate": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "originalPrice": { "type": "number" },
+        "replacementPrice": { "type": "number" },
+        "previousRepairCount": { "type": "number" },
+        "previousRepairCost": { "type": "number" },
+        "recurringFault": { "type": "boolean" },
+        "problemDescription": { "type": "string", "minLength": 5, "maxLength": 1500 },
+        "location": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "imageUrl": { "type": "string", "maxLength": 350000 },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "QUOTATION_RECEIVED", "QUOTATION_ACCEPTED", "REPAIR_IN_PROGRESS", "REPAIR_COMPLETED", "CANCELLED"]
+        },
+        "acceptedQuotationId": { "type": "string", "maxLength": 128 },
+        "acceptedMechanicId": { "type": "string", "maxLength": 128 },
+        "acceptedMechanicName": { "type": "string", "maxLength": 100 },
+        "acceptedCost": { "type": "number" },
+        "timelineNotes": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "customerId", "customerName", "category", "productName", "brand",
+        "modelNumber", "productAgeYears", "purchaseDate", "originalPrice",
+        "replacementPrice", "previousRepairCount", "previousRepairCost",
+        "recurringFault", "problemDescription", "location", "status",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Mechanic quotation submitted for a customer repair request.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requestId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "mechanicId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "mechanicName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "estimatedRepairCost": { "type": "number" },
+        "spareParts": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "completionTimeDays": { "type": "number" },
+        "estimatedAdditionalLifespanMonths": { "type": "number" },
+        "repairDescription": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "requestId", "customerId", "productName", "mechanicId", "mechanicName",
+        "estimatedRepairCost", "spareParts", "completionTimeDays",
+        "estimatedAdditionalLifespanMonths", "repairDescription", "status",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification for accepted quotations, repair progress, and accepted offers.",
+      "type": "object",
+      "properties": {
+        "recipientId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "message": { "type": "string", "minLength": 2, "maxLength": 500 },
+        "relatedId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["QUOTATION_ACCEPTED", "REPAIR_STATUS", "OFFER_ACCEPTED", "GENERAL"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientId", "title", "message", "relatedId", "type", "read", "createdAt"]
+    },
+    "WarrantyRecord": {
+      "title": "WarrantyRecord",
+      "description": "Registered product warranty tracked by a customer.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "serialOrImei": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "purchaseDate": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "warrantyDurationMonths": { "type": "number" },
+        "expiryDate": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "purchasePrice": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "productName", "brand", "serialOrImei", "purchaseDate",
+        "warrantyDurationMonths", "expiryDate", "purchasePrice", "createdAt", "updatedAt"
+      ]
+    },
+    "ResaleListing": {
+      "title": "ResaleListing",
+      "description": "Used product listed by a customer on the RepairLoop resale marketplace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sellerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sellerName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "ageYears": { "type": "number" },
+        "condition": { "type": "string", "enum": ["LIKE_NEW", "GOOD", "FAIR", "NEEDS_REPAIR"] },
+        "expectedPrice": { "type": "number" },
+        "location": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 1500 },
+        "imageUrl": { "type": "string", "maxLength": 350000 },
+        "status": { "type": "string", "enum": ["AVAILABLE", "OFFER_RECEIVED", "SOLD"] },
+        "acceptedOfferId": { "type": "string", "maxLength": 128 },
+        "buyerVendorId": { "type": "string", "maxLength": 128 },
+        "buyerVendorName": { "type": "string", "maxLength": 100 },
+        "soldPrice": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "sellerId", "sellerName", "productName", "category", "brand",
+        "model", "ageYears", "condition", "expectedPrice", "location",
+        "description", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "VendorOffer": {
+      "title": "VendorOffer",
+      "description": "Vendor purchase offer on a resale listing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sellerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "vendorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "vendorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "offeredPrice": { "type": "number" },
+        "message": { "type": "string", "minLength": 2, "maxLength": 600 },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "listingId", "sellerId", "productName", "vendorId", "vendorName",
+        "offeredPrice", "message", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "PurchaseRecord": {
+      "title": "PurchaseRecord",
+      "description": "Completed resale purchase record created when a customer accepts a vendor offer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "offerId": { "type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sellerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sellerName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "vendorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "vendorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "productName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "brand": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "finalPrice": { "type": "number" },
+        "purchasedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id", "listingId", "offerId", "sellerId", "sellerName", "vendorId",
+        "vendorName", "productName", "brand", "model", "finalPrice", "purchasedAt"
+      ]
+    },
+    "DecisionAnalysis": {
+      "title": "DecisionAnalysis",
+      "description": "Saved repair-vs-replace calculation record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "productName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "originalPrice": { "type": "number" },
+        "productAgeYears": { "type": "number" },
+        "repairCost": { "type": "number" },
+        "replacementCost": { "type": "number" },
+        "additionalLifespanMonths": { "type": "number" },
+        "previousRepairCount": { "type": "number" },
+        "previousRepairCost": { "type": "number" },
+        "recurringFault": { "type": "boolean" },
+        "repairScore": { "type": "number" },
+        "replacementScore": { "type": "number" },
+        "repairCostRatio": { "type": "number" },
+        "estimatedSavings": { "type": "number" },
+        "recommendation": { "type": "string", "enum": ["REPAIR", "REPLACE"] },
+        "explanation": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "engineSource": { "type": "string", "enum": ["typescript-mirror", "java-http-core"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "productName", "originalPrice", "productAgeYears", "repairCost",
+        "replacementCost", "additionalLifespanMonths", "previousRepairCount",
+        "previousRepairCost", "recurringFault", "repairScore", "replacementScore",
+        "repairCostRatio", "estimatedSavings", "recommendation", "explanation",
+        "engineSource", "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profiles isolated per owner UID."
+    },
+    "/repairRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/RepairRequest" },
+      "description": "Customer repair requests visible to owner and mechanics for open/assigned jobs."
+    },
+    "/quotations/{quotationId}": {
+      "schema": { "$ref": "#/entities/Quotation" },
+      "description": "Quotations isolated to the submitting mechanic and target request customer."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User notifications scoped to recipientId."
+    },
+    "/warranties/{warrantyId}": {
+      "schema": { "$ref": "#/entities/WarrantyRecord" },
+      "description": "Customer warranty registry items scoped to userId."
+    },
+    "/resaleListings/{listingId}": {
+      "schema": { "$ref": "#/entities/ResaleListing" },
+      "description": "Resale marketplace listings visible to seller, vendors (when available/offered), and buyer."
+    },
+    "/vendorOffers/{offerId}": {
+      "schema": { "$ref": "#/entities/VendorOffer" },
+      "description": "Vendor offers isolated to the submitting vendor and listing seller."
+    },
+    "/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/PurchaseRecord" },
+      "description": "Completed purchase records visible only to the seller and purchasing vendor."
+    },
+    "/decisionHistory/{entryId}": {
+      "schema": { "$ref": "#/entities/DecisionAnalysis" },
+      "description": "Saved repair-vs-replace decision calculations scoped to userId."
+    }
+  }
+}

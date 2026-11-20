@@ -1,0 +1,672 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Core Primitives
+    // ---------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function getUserRole(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    }
+
+    function isCustomer() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getUserRole(request.auth.uid) == 'customer';
+    }
+
+    function isMechanic() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getUserRole(request.auth.uid) == 'mechanic';
+    }
+
+    function isVendor() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getUserRole(request.auth.uid) == 'vendor';
+    }
+
+    // ---------------------------------------------------------
+    // Entity Validation Blueprints
+    // ---------------------------------------------------------
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'fullName', 'email', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'fullName', 'email', 'role', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 150
+        && data.role in ['customer', 'mechanic', 'vendor']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRepairRequest(data) {
+      return data.keys().hasAll([
+          'id', 'customerId', 'customerName', 'category', 'productName', 'brand',
+          'modelNumber', 'productAgeYears', 'purchaseDate', 'originalPrice',
+          'replacementPrice', 'previousRepairCount', 'previousRepairCost',
+          'recurringFault', 'problemDescription', 'location', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'customerId', 'customerName', 'category', 'productName', 'brand',
+          'modelNumber', 'productAgeYears', 'purchaseDate', 'originalPrice',
+          'replacementPrice', 'previousRepairCount', 'previousRepairCost',
+          'recurringFault', 'problemDescription', 'location', 'imageUrl', 'status',
+          'acceptedQuotationId', 'acceptedMechanicId', 'acceptedMechanicName',
+          'acceptedCost', 'timelineNotes', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.customerId)
+        && data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 100
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 60
+        && data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120
+        && data.brand is string && data.brand.size() >= 1 && data.brand.size() <= 80
+        && data.modelNumber is string && data.modelNumber.size() >= 1 && data.modelNumber.size() <= 80
+        && data.productAgeYears is number && data.productAgeYears >= 0 && data.productAgeYears <= 100
+        && data.purchaseDate is string && data.purchaseDate.size() >= 4 && data.purchaseDate.size() <= 30
+        && data.originalPrice is number && data.originalPrice >= 0
+        && data.replacementPrice is number && data.replacementPrice >= 0
+        && data.previousRepairCount is number && data.previousRepairCount >= 0
+        && data.previousRepairCost is number && data.previousRepairCost >= 0
+        && data.recurringFault is bool
+        && data.problemDescription is string && data.problemDescription.size() >= 5 && data.problemDescription.size() <= 1500
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 120
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 350000))
+        && data.status in ['PENDING', 'QUOTATION_RECEIVED', 'QUOTATION_ACCEPTED', 'REPAIR_IN_PROGRESS', 'REPAIR_COMPLETED', 'CANCELLED']
+        && (!('acceptedQuotationId' in data) || data.acceptedQuotationId == null || isValidId(data.acceptedQuotationId))
+        && (!('acceptedMechanicId' in data) || data.acceptedMechanicId == null || isValidId(data.acceptedMechanicId))
+        && (!('acceptedMechanicName' in data) || data.acceptedMechanicName == null || (data.acceptedMechanicName is string && data.acceptedMechanicName.size() <= 100))
+        && (!('acceptedCost' in data) || data.acceptedCost == null || (data.acceptedCost is number && data.acceptedCost >= 0))
+        && (!('timelineNotes' in data) || data.timelineNotes == null || (data.timelineNotes is string && data.timelineNotes.size() <= 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidQuotation(data) {
+      return data.keys().hasAll([
+          'id', 'requestId', 'customerId', 'productName', 'mechanicId', 'mechanicName',
+          'estimatedRepairCost', 'spareParts', 'completionTimeDays',
+          'estimatedAdditionalLifespanMonths', 'repairDescription', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'requestId', 'customerId', 'productName', 'mechanicId', 'mechanicName',
+          'estimatedRepairCost', 'spareParts', 'completionTimeDays',
+          'estimatedAdditionalLifespanMonths', 'repairDescription', 'notes', 'status',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.requestId)
+        && isValidId(data.customerId)
+        && data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120
+        && isValidId(data.mechanicId)
+        && data.mechanicName is string && data.mechanicName.size() >= 2 && data.mechanicName.size() <= 100
+        && data.estimatedRepairCost is number && data.estimatedRepairCost > 0
+        && data.spareParts is string && data.spareParts.size() >= 1 && data.spareParts.size() <= 500
+        && data.completionTimeDays is number && data.completionTimeDays >= 1 && data.completionTimeDays <= 365
+        && data.estimatedAdditionalLifespanMonths is number && data.estimatedAdditionalLifespanMonths >= 1 && data.estimatedAdditionalLifespanMonths <= 240
+        && data.repairDescription is string && data.repairDescription.size() >= 5 && data.repairDescription.size() <= 1000
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && data.status in ['PENDING', 'ACCEPTED', 'REJECTED']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['recipientId', 'title', 'message', 'relatedId', 'type', 'read', 'createdAt'])
+        && data.keys().hasOnly(['recipientId', 'title', 'message', 'relatedId', 'type', 'read', 'createdAt'])
+        && isValidId(data.recipientId)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 120
+        && data.message is string && data.message.size() >= 2 && data.message.size() <= 500
+        && isValidId(data.relatedId)
+        && data.type in ['QUOTATION_ACCEPTED', 'REPAIR_STATUS', 'OFFER_ACCEPTED', 'GENERAL']
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidWarranty(data) {
+      return data.keys().hasAll([
+          'userId', 'productName', 'brand', 'serialOrImei', 'purchaseDate',
+          'warrantyDurationMonths', 'expiryDate', 'purchasePrice', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'productName', 'brand', 'serialOrImei', 'purchaseDate',
+          'warrantyDurationMonths', 'expiryDate', 'purchasePrice', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.userId)
+        && data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120
+        && data.brand is string && data.brand.size() >= 1 && data.brand.size() <= 80
+        && data.serialOrImei is string && data.serialOrImei.size() >= 2 && data.serialOrImei.size() <= 100
+        && data.purchaseDate is string && data.purchaseDate.size() >= 4 && data.purchaseDate.size() <= 30
+        && data.warrantyDurationMonths is number && data.warrantyDurationMonths >= 1 && data.warrantyDurationMonths <= 240
+        && data.expiryDate is string && data.expiryDate.size() >= 4 && data.expiryDate.size() <= 30
+        && data.purchasePrice is number && data.purchasePrice >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidResaleListing(data) {
+      return data.keys().hasAll([
+          'id', 'sellerId', 'sellerName', 'productName', 'category', 'brand',
+          'model', 'ageYears', 'condition', 'expectedPrice', 'location',
+          'description', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'sellerId', 'sellerName', 'productName', 'category', 'brand',
+          'model', 'ageYears', 'condition', 'expectedPrice', 'location',
+          'description', 'imageUrl', 'status', 'acceptedOfferId', 'buyerVendorId',
+          'buyerVendorName', 'soldPrice', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.sellerId)
+        && data.sellerName is string && data.sellerName.size() >= 2 && data.sellerName.size() <= 100
+        && data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 60
+        && data.brand is string && data.brand.size() >= 1 && data.brand.size() <= 80
+        && data.model is string && data.model.size() >= 1 && data.model.size() <= 80
+        && data.ageYears is number && data.ageYears >= 0 && data.ageYears <= 100
+        && data.condition in ['LIKE_NEW', 'GOOD', 'FAIR', 'NEEDS_REPAIR']
+        && data.expectedPrice is number && data.expectedPrice > 0
+        && data.location is string && data.location.size() >= 2 && data.location.size() <= 120
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 1500
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 350000))
+        && data.status in ['AVAILABLE', 'OFFER_RECEIVED', 'SOLD']
+        && (!('acceptedOfferId' in data) || data.acceptedOfferId == null || isValidId(data.acceptedOfferId))
+        && (!('buyerVendorId' in data) || data.buyerVendorId == null || isValidId(data.buyerVendorId))
+        && (!('buyerVendorName' in data) || data.buyerVendorName == null || (data.buyerVendorName is string && data.buyerVendorName.size() <= 100))
+        && (!('soldPrice' in data) || data.soldPrice == null || (data.soldPrice is number && data.soldPrice > 0))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidVendorOffer(data) {
+      return data.keys().hasAll([
+          'id', 'listingId', 'sellerId', 'productName', 'vendorId', 'vendorName',
+          'offeredPrice', 'message', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'listingId', 'sellerId', 'productName', 'vendorId', 'vendorName',
+          'offeredPrice', 'message', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.listingId)
+        && isValidId(data.sellerId)
+        && data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120
+        && isValidId(data.vendorId)
+        && data.vendorName is string && data.vendorName.size() >= 2 && data.vendorName.size() <= 100
+        && data.offeredPrice is number && data.offeredPrice > 0
+        && data.message is string && data.message.size() >= 2 && data.message.size() <= 600
+        && data.status in ['PENDING', 'ACCEPTED', 'REJECTED']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPurchaseRecord(data) {
+      return data.keys().hasAll([
+          'id', 'listingId', 'offerId', 'sellerId', 'sellerName', 'vendorId',
+          'vendorName', 'productName', 'brand', 'model', 'finalPrice', 'purchasedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'listingId', 'offerId', 'sellerId', 'sellerName', 'vendorId',
+          'vendorName', 'productName', 'brand', 'model', 'finalPrice', 'purchasedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.listingId)
+        && isValidId(data.offerId)
+        && isValidId(data.sellerId)
+        && data.sellerName is string && data.sellerName.size() >= 2 && data.sellerName.size() <= 100
+        && isValidId(data.vendorId)
+        && data.vendorName is string && data.vendorName.size() >= 2 && data.vendorName.size() <= 100
+        && data.productName is string && data.productName.size() >= 2 && data.productName.size() <= 120
+        && data.brand is string && data.brand.size() >= 1 && data.brand.size() <= 80
+        && data.model is string && data.model.size() >= 1 && data.model.size() <= 80
+        && data.finalPrice is number && data.finalPrice > 0
+        && data.purchasedAt is timestamp;
+    }
+
+    function isValidDecisionAnalysis(data) {
+      return data.keys().hasAll([
+          'userId', 'productName', 'originalPrice', 'productAgeYears', 'repairCost',
+          'replacementCost', 'additionalLifespanMonths', 'previousRepairCount',
+          'previousRepairCost', 'recurringFault', 'repairScore', 'replacementScore',
+          'repairCostRatio', 'estimatedSavings', 'recommendation', 'explanation',
+          'engineSource', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'productName', 'originalPrice', 'productAgeYears', 'repairCost',
+          'replacementCost', 'additionalLifespanMonths', 'previousRepairCount',
+          'previousRepairCost', 'recurringFault', 'repairScore', 'replacementScore',
+          'repairCostRatio', 'estimatedSavings', 'recommendation', 'explanation',
+          'engineSource', 'createdAt'
+        ])
+        && isValidId(data.userId)
+        && data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 120
+        && data.originalPrice is number && data.originalPrice >= 0
+        && data.productAgeYears is number && data.productAgeYears >= 0
+        && data.repairCost is number && data.repairCost >= 0
+        && data.replacementCost is number && data.replacementCost >= 0
+        && data.additionalLifespanMonths is number && data.additionalLifespanMonths >= 0
+        && data.previousRepairCount is number && data.previousRepairCount >= 0
+        && data.previousRepairCost is number && data.previousRepairCost >= 0
+        && data.recurringFault is bool
+        && data.repairScore is number && data.repairScore >= 0 && data.repairScore <= 100
+        && data.replacementScore is number && data.replacementScore >= 0 && data.replacementScore <= 100
+        && data.repairCostRatio is number && data.repairCostRatio >= 0
+        && data.estimatedSavings is number
+        && data.recommendation in ['REPAIR', 'REPLACE']
+        && data.explanation is string && data.explanation.size() >= 5 && data.explanation.size() <= 1000
+        && data.engineSource in ['typescript-mirror', 'java-http-core']
+        && data.createdAt is timestamp;
+    }
+
+    // ---------------------------------------------------------
+    // Users (Strict PII Isolation & Immutable Role)
+    // ---------------------------------------------------------
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().role == existing().role
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Repair Requests
+    // ---------------------------------------------------------
+    match /repairRequests/{requestId} {
+      allow get: if isSignedIn()
+        && isValidId(requestId)
+        && (
+          existing().customerId == request.auth.uid
+          || existing().acceptedMechanicId == request.auth.uid
+          || existing().status in ['PENDING', 'QUOTATION_RECEIVED']
+        );
+
+      allow list: if isSignedIn()
+        && (
+          resource.data.customerId == request.auth.uid
+          || resource.data.acceptedMechanicId == request.auth.uid
+          || resource.data.status in ['PENDING', 'QUOTATION_RECEIVED']
+        );
+
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(requestId)
+        && isValidRepairRequest(incoming())
+        && incoming().id == requestId
+        && incoming().customerId == request.auth.uid
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isCustomer();
+
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(requestId)
+        && isValidRepairRequest(incoming())
+        && existing().status != 'REPAIR_COMPLETED'
+        && existing().status != 'CANCELLED'
+        && incoming().id == existing().id
+        && incoming().customerId == existing().customerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            existing().customerId == request.auth.uid
+            && existing().status in ['PENDING', 'QUOTATION_RECEIVED']
+            && incoming().status == 'CANCELLED'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'timelineNotes', 'updatedAt'])
+          )
+          ||
+          (
+            isMechanic()
+            && existing().status == 'PENDING'
+            && incoming().status == 'QUOTATION_RECEIVED'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          ||
+          (
+            existing().customerId == request.auth.uid
+            && existing().status in ['PENDING', 'QUOTATION_RECEIVED']
+            && incoming().status == 'QUOTATION_ACCEPTED'
+            && incoming().acceptedQuotationId is string
+            && incoming().acceptedMechanicId is string
+            && incoming().acceptedMechanicName is string
+            && incoming().acceptedCost is number
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'acceptedQuotationId', 'acceptedMechanicId',
+              'acceptedMechanicName', 'acceptedCost', 'timelineNotes', 'updatedAt'
+            ])
+          )
+          ||
+          (
+            isMechanic()
+            && existing().acceptedMechanicId == request.auth.uid
+            && (
+              (existing().status == 'QUOTATION_ACCEPTED' && incoming().status == 'REPAIR_IN_PROGRESS')
+              || (existing().status == 'REPAIR_IN_PROGRESS' && incoming().status == 'REPAIR_COMPLETED')
+            )
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'timelineNotes', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Quotations (Strict Mechanic Isolation)
+    // ---------------------------------------------------------
+    match /quotations/{quotationId} {
+      allow get: if isSignedIn()
+        && isValidId(quotationId)
+        && (existing().mechanicId == request.auth.uid || existing().customerId == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && (resource.data.mechanicId == request.auth.uid || resource.data.customerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(quotationId)
+        && isValidQuotation(incoming())
+        && incoming().id == quotationId
+        && incoming().mechanicId == request.auth.uid
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isMechanic()
+        && exists(/databases/$(database)/documents/repairRequests/$(incoming().requestId))
+        && get(/databases/$(database)/documents/repairRequests/$(incoming().requestId)).data.customerId == incoming().customerId
+        && get(/databases/$(database)/documents/repairRequests/$(incoming().requestId)).data.status in ['PENDING', 'QUOTATION_RECEIVED'];
+
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(quotationId)
+        && isValidQuotation(incoming())
+        && existing().status == 'PENDING'
+        && existing().customerId == request.auth.uid
+        && incoming().id == existing().id
+        && incoming().requestId == existing().requestId
+        && incoming().customerId == existing().customerId
+        && incoming().mechanicId == existing().mechanicId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && (
+          (
+            incoming().status == 'ACCEPTED'
+            && getAfter(/databases/$(database)/documents/repairRequests/$(existing().requestId)).data.status == 'QUOTATION_ACCEPTED'
+            && getAfter(/databases/$(database)/documents/repairRequests/$(existing().requestId)).data.acceptedQuotationId == quotationId
+          )
+          ||
+          (
+            incoming().status == 'REJECTED'
+            && getAfter(/databases/$(database)/documents/repairRequests/$(existing().requestId)).data.status in ['QUOTATION_RECEIVED', 'QUOTATION_ACCEPTED']
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Notifications
+    // ---------------------------------------------------------
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn()
+        && isValidId(notificationId)
+        && existing().recipientId == request.auth.uid;
+
+      allow list: if isSignedIn()
+        && resource.data.recipientId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().read == false
+        && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(notificationId)
+        && existing().recipientId == request.auth.uid
+        && isValidNotification(incoming())
+        && incoming().recipientId == existing().recipientId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Warranty Register
+    // ---------------------------------------------------------
+    match /warranties/{warrantyId} {
+      allow get: if isSignedIn() && isValidId(warrantyId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(warrantyId)
+        && isValidWarranty(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(warrantyId)
+        && existing().userId == request.auth.uid
+        && isValidWarranty(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'productName', 'brand', 'serialOrImei', 'purchaseDate',
+          'warrantyDurationMonths', 'expiryDate', 'purchasePrice', 'updatedAt'
+        ]);
+      allow delete: if isSignedIn() && isValidId(warrantyId) && existing().userId == request.auth.uid;
+    }
+
+    // ---------------------------------------------------------
+    // Resale Marketplace Listings
+    // ---------------------------------------------------------
+    match /resaleListings/{listingId} {
+      allow get: if isSignedIn()
+        && isValidId(listingId)
+        && (
+          existing().sellerId == request.auth.uid
+          || existing().buyerVendorId == request.auth.uid
+          || existing().status in ['AVAILABLE', 'OFFER_RECEIVED']
+        );
+
+      allow list: if isSignedIn()
+        && (
+          resource.data.sellerId == request.auth.uid
+          || resource.data.buyerVendorId == request.auth.uid
+          || resource.data.status in ['AVAILABLE', 'OFFER_RECEIVED']
+        );
+
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(listingId)
+        && isValidResaleListing(incoming())
+        && incoming().id == listingId
+        && incoming().sellerId == request.auth.uid
+        && incoming().status == 'AVAILABLE'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isCustomer();
+
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(listingId)
+        && isValidResaleListing(incoming())
+        && existing().status != 'SOLD'
+        && incoming().id == existing().id
+        && incoming().sellerId == existing().sellerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            isVendor()
+            && existing().status == 'AVAILABLE'
+            && incoming().status == 'OFFER_RECEIVED'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          ||
+          (
+            existing().sellerId == request.auth.uid
+            && existing().status in ['AVAILABLE', 'OFFER_RECEIVED']
+            && incoming().status == 'SOLD'
+            && incoming().acceptedOfferId is string
+            && incoming().buyerVendorId is string
+            && incoming().buyerVendorName is string
+            && incoming().soldPrice is number
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'acceptedOfferId', 'buyerVendorId', 'buyerVendorName', 'soldPrice', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isSignedIn()
+        && isValidId(listingId)
+        && existing().sellerId == request.auth.uid
+        && existing().status != 'SOLD';
+    }
+
+    // ---------------------------------------------------------
+    // Vendor Offers (Strict Vendor Isolation)
+    // ---------------------------------------------------------
+    match /vendorOffers/{offerId} {
+      allow get: if isSignedIn()
+        && isValidId(offerId)
+        && (existing().vendorId == request.auth.uid || existing().sellerId == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && (resource.data.vendorId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(offerId)
+        && isValidVendorOffer(incoming())
+        && incoming().id == offerId
+        && incoming().vendorId == request.auth.uid
+        && incoming().status == 'PENDING'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isVendor()
+        && exists(/databases/$(database)/documents/resaleListings/$(incoming().listingId))
+        && get(/databases/$(database)/documents/resaleListings/$(incoming().listingId)).data.sellerId == incoming().sellerId
+        && get(/databases/$(database)/documents/resaleListings/$(incoming().listingId)).data.status in ['AVAILABLE', 'OFFER_RECEIVED'];
+
+      allow update: if isSignedIn()
+        && isVerified()
+        && isValidId(offerId)
+        && isValidVendorOffer(incoming())
+        && existing().status == 'PENDING'
+        && existing().sellerId == request.auth.uid
+        && incoming().id == existing().id
+        && incoming().listingId == existing().listingId
+        && incoming().sellerId == existing().sellerId
+        && incoming().vendorId == existing().vendorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && (
+          (
+            incoming().status == 'ACCEPTED'
+            && getAfter(/databases/$(database)/documents/resaleListings/$(existing().listingId)).data.status == 'SOLD'
+            && getAfter(/databases/$(database)/documents/resaleListings/$(existing().listingId)).data.acceptedOfferId == offerId
+          )
+          ||
+          (
+            incoming().status == 'REJECTED'
+            && getAfter(/databases/$(database)/documents/resaleListings/$(existing().listingId)).data.status in ['AVAILABLE', 'OFFER_RECEIVED', 'SOLD']
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Purchase Records
+    // ---------------------------------------------------------
+    match /purchases/{purchaseId} {
+      allow get: if isSignedIn()
+        && isValidId(purchaseId)
+        && (existing().vendorId == request.auth.uid || existing().sellerId == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && (resource.data.vendorId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(purchaseId)
+        && isValidPurchaseRecord(incoming())
+        && incoming().id == purchaseId
+        && incoming().sellerId == request.auth.uid
+        && incoming().purchasedAt == request.time
+        && getAfter(/databases/$(database)/documents/resaleListings/$(incoming().listingId)).data.status == 'SOLD'
+        && getAfter(/databases/$(database)/documents/resaleListings/$(incoming().listingId)).data.acceptedOfferId == incoming().offerId;
+
+      allow update, delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Saved Repair-vs-Replace Decision Analyses
+    // ---------------------------------------------------------
+    match /decisionHistory/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && isVerified()
+        && isValidId(entryId)
+        && isValidDecisionAnalysis(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(entryId) && existing().userId == request.auth.uid;
+    }
+  }
+}

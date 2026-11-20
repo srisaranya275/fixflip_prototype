@@ -1,0 +1,6 @@
+{
+  "name": "RepairLoop",
+  "description": "Repair. Reuse. Renew. Electronics and household appliance repair, quotation management, warranty register, resale marketplace, and repair-vs-replace decision platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
